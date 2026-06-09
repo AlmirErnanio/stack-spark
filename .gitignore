@@ -29,5 +29,9 @@ data/*.json
 *.swp
 *.swo
 
+# Claude Code
+.claude/
+CLAUDE.md
+
 # macOS
 .DS_Store
