@@ -1,0 +1,33 @@
+# Credenciais e segredos — NUNCA versionar
+.env
+
+# Ambiente virtual Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Logs do Airflow (gerados em runtime)
+logs/
+*.log
+
+# Dados locais
+data/gold/
+data/*.parquet
+data/*.csv
+data/*.json
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store

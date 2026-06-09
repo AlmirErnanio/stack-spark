@@ -1,0 +1,9 @@
+spark_project:
+  target: dev
+  outputs:
+    dev:
+      type: spark
+      method: spark_connect
+      host: spark-master
+      port: 7077
+      schema: default

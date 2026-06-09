@@ -1,0 +1,5 @@
+pyspark==4.1.2
+
+# S3 — acesso direto via Python
+boto3
+s3fs        # pandas/pyarrow com s3://  (usa boto3 internamente)
