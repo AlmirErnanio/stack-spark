@@ -1,20 +1,48 @@
+import glob
 import os
+import shutil
+from pathlib import Path
+
+from dotenv import load_dotenv
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, count, to_date
 
+# Carrega .env quando rodando localmente (no-op dentro do Docker)
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 BUCKET   = os.environ["AWS_S3_BUCKET"]
-PREFIX   = "raw/vendas"                          # ajuste o caminho dentro do bucket
-S3_PATH  = f"s3a://{BUCKET}/{PREFIX}/"
+PREFIX   = "bronze/dimensao/categorias"                          # ajuste o caminho dentro do bucket
+S3_PATH  = f"s3a://{BUCKET}/{PREFIX}"
 
-spark = (
+_master = os.environ.get("SPARK_MASTER", "local[*]")
+
+builder = (
     SparkSession.builder
     .appName("import_data_s3")
-    .master(os.environ.get("SPARK_MASTER", "spark://spark-master:7077"))
-    .getOrCreate()
+    .master(_master)
 )
 
-spark.sparkContext.setLogLevel("WARN")
+# Fora do Docker: injeta os JARs do S3A e credenciais via config
+# (no cluster, o spark-defaults.conf já cuida disso)
+if _master == "local[*]":
+    builder = (
+        builder
+        .config(
+            "spark.jars.packages",
+            "org.apache.hadoop:hadoop-aws:3.4.2,"
+            "software.amazon.awssdk:bundle:2.29.52",
+        )
+        .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        .config("spark.hadoop.fs.s3a.access.key",  os.environ["AWS_ACCESS_KEY_ID"])
+        .config("spark.hadoop.fs.s3a.secret.key",  os.environ["AWS_SECRET_ACCESS_KEY"])
+        .config("spark.hadoop.fs.s3a.endpoint.region",
+                os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
+        .config("spark.hadoop.fs.s3a.path.style.access", "true")
+    )
+
+spark = builder.getOrCreate()
+
+spark.sparkContext.setLogLevel("ERROR")
 
 # ── Leitura ────────────────────────────────────────────────────────────────────
 df = (
@@ -24,32 +52,20 @@ df = (
 )
 
 print(f"\n>>> Schema do dataset ({S3_PATH}):")
-df.printSchema()
 
-print(f">>> Total de linhas: {df.count():,}\n")
+# ── Escrita local ───────────────────────────────────────────────────────────────
+_root      = Path(__file__).resolve().parent.parent / "data" / "raw"
+_tmp_dir   = str(_root / "_tmp_categorias")
+_dest_file = str(_root / "categorias.parquet")
 
-# ── Transformação mínima de exemplo ───────────────────────────────────────────
-if "data_venda" in df.columns:
-    df = df.withColumn("data_venda", to_date(col("data_venda")))
+_root.mkdir(parents=True, exist_ok=True)
 
-resumo = (
-    df.groupBy("data_venda")
-    .agg(count("*").alias("qtd_registros"))
-    .orderBy("data_venda")
-)
+df.coalesce(1).write.mode("overwrite").parquet(_tmp_dir)
 
-resumo.show(20, truncate=False)
+_part = glob.glob(f"{_tmp_dir}/part-*.parquet")[0]
+shutil.move(_part, _dest_file)
+shutil.rmtree(_tmp_dir)
 
-# ── Escrita na camada silver (também no S3) ────────────────────────────────────
-SILVER_PATH = f"s3a://{BUCKET}/silver/vendas/"
-
-(
-    df.write
-    .mode("overwrite")
-    .partitionBy("data_venda")
-    .parquet(SILVER_PATH)
-)
-
-print(f">>> Dados gravados em: {SILVER_PATH}")
+print(f">>> Arquivo salvo em: {_dest_file}")
 
 spark.stop()

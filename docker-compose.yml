@@ -37,6 +37,11 @@ x-airflow-common: &airflow-common
       {"conn_type": "spark", "host": "spark-master", "port": 7077,
        "extra": {"deploy_mode": "client", "spark_home": "/opt/spark"}}
     SPARK_MASTER: spark://spark-master:7077
+    # AWS — necessário para que spark-submit herde as credenciais
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+    AWS_S3_BUCKET: ${AWS_S3_BUCKET}
     # Credenciais do usuário admin (usadas apenas pelo airflow-init)
     _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-admin}
     _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD}
@@ -69,6 +74,7 @@ services:
       - ./jobs:/opt/spark/work-dir/jobs
       - ./data:/opt/spark/work-dir/data
       - ./conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./conf/log4j2.properties:/opt/spark/conf/log4j2.properties
       - spark-logs:/opt/spark/logs
       - spark-ivy-cache:/opt/spark/ivy-cache
     networks:
@@ -97,6 +103,7 @@ services:
       - ./jobs:/opt/spark/work-dir/jobs
       - ./data:/opt/spark/work-dir/data
       - ./conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./conf/log4j2.properties:/opt/spark/conf/log4j2.properties
       - spark-logs:/opt/spark/logs
       - spark-ivy-cache:/opt/spark/ivy-cache
     networks:
@@ -125,6 +132,7 @@ services:
       - ./jobs:/opt/spark/work-dir/jobs
       - ./data:/opt/spark/work-dir/data
       - ./conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./conf/log4j2.properties:/opt/spark/conf/log4j2.properties
       - spark-logs:/opt/spark/logs
       - spark-ivy-cache:/opt/spark/ivy-cache
     networks:
@@ -153,6 +161,7 @@ services:
       - ./jobs:/opt/spark/work-dir/jobs
       - ./data:/opt/spark/work-dir/data
       - ./conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./conf/log4j2.properties:/opt/spark/conf/log4j2.properties
       - spark-logs:/opt/spark/logs
       - spark-ivy-cache:/opt/spark/ivy-cache
     networks:
@@ -172,6 +181,7 @@ services:
       - "18080:18080"
     volumes:
       - ./conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./conf/log4j2.properties:/opt/spark/conf/log4j2.properties
       - spark-logs:/opt/spark/logs
     networks:
       - spark-net
@@ -235,8 +245,13 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
+      - ./jobs:/opt/airflow/jobs
       - ./spark_scripts:/opt/airflow/spark_scripts
       - ./dbt_project:/opt/airflow/dbt_project
+      - ./conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./conf/log4j2.properties:/opt/spark/conf/log4j2.properties
+      - spark-ivy-cache:/opt/spark/ivy-cache
+      - spark-logs:/opt/spark/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -252,12 +267,18 @@ services:
   airflow-scheduler:
     <<: *airflow-common
     container_name: airflow-scheduler
-    command: airflow scheduler
+    command: bash -c "chmod -R 777 /opt/spark/ivy-cache ; exec airflow scheduler"
     volumes:
       - ./dags:/opt/airflow/dags
       - ./logs:/opt/airflow/logs
+      - ./jobs:/opt/airflow/jobs
+      - ./data:/opt/spark/work-dir/data
       - ./spark_scripts:/opt/airflow/spark_scripts
       - ./dbt_project:/opt/airflow/dbt_project
+      - ./conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./conf/log4j2.properties:/opt/spark/conf/log4j2.properties
+      - spark-ivy-cache:/opt/spark/ivy-cache
+      - spark-logs:/opt/spark/logs
     depends_on:
       postgres:
         condition: service_healthy
