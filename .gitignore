@@ -14,11 +14,8 @@ __pycache__/
 logs/
 *.log
 
-# Dados locais
-data/gold/
-data/*.parquet
-data/*.csv
-data/*.json
+# Dados locais — toda a pasta data/ é gerada em runtime
+data/
 
 # Jupyter
 .ipynb_checkpoints/
